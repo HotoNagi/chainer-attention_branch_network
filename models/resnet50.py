@@ -79,6 +79,7 @@ class Block(chainer.Chain):
 
         return h
 
+blockexpansion = 4
 
 class ResNet50(chainer.Chain):
 
@@ -90,24 +91,49 @@ class ResNet50(chainer.Chain):
             self.conv1 = L.Convolution2D(
                 3, 64, 7, 2, 3, initialW=initializers.HeNormal(), nobias=True)
             self.bn1 = L.BatchNormalization(64)
-            self.res2 = Block(3, 64, 64, 256, 1)
-            self.res3 = Block(4, 256, 128, 512)
-            self.res4 = Block(6, 512, 256, 1024)
-            self.res5 = Block(3, 1024, 512, 2048)
-            self.fc = L.Linear(2048, output)
+            self.layer1 = Block(3, 64, 64, 256, 1)
+            self.layer2 = Block(4, 256, 128, 512)
+            self.layer3 = Block(6, 512, 256, 1024)
+
+            self.att_layer4 = Block(3, 1024, 512, 2048)
+            self.bn_att = L.BatchNormalization(512*blockexpansion)
+            self.att_conv = L.Convolution2D(
+                512*blockexpansion, output, ksize=1, pad=0, initialW=initializers.HeNormal(), nobias=True)
+            self.bn_att2 = L.BatchNormalization(output)
+            self.att_conv2 = L.Convolution2D(
+                output, output, ksize=1, pad=0, initialW=initializers.HeNormal(), nobias=True)
+            self.att_conv3 = L.Convolution2D(
+                output, 1, ksize=3, pad=1, initialW=initializers.HeNormal(), nobias=True)
+            self.bn_att = L.BatchNormalization(1)
+
+            self.layer4 = Block(3, 1024, 512, 2048)
+            self.fc = L.Linear(512*blockexpansion, output)
+
 
     def __call__(self, x):
 
         h = self.bn1(self.conv1(x))
         h = F.max_pooling_2d(F.relu(h), 3, stride=2)
 
-        h = self.res2(h)
-        h = self.res3(h)
-        h = self.res4(h)
-        h = self.res5(h)
-        h = F.average_pooling_2d(h, 7, stride=1)
+        h = self.layer1(h)
+        h = self.layer2(h)
+        h = self.layer3(h)
 
-        h = F.dropout(h, ratio=0.5)
-        h = self.fc(h)
+        fe = h
 
-        return h
+        ah = self.bn_att(self.att_layer4(h))
+        ah = F.relu(self.bn_att2(self.att_conv(ah)))
+        self.att = F.sigmoid(self.bn_att3(self.att_conv3(ah)))
+        ah = self.att_conv2(ah)
+        ah = F.average_pooling_2d(h, 14)
+        ah = F.reshape(ah, (ah.size[0], -1)) # ah = ah.view(ah.size(0), -1)の書き変え
+
+        rh = h * self.att
+        rh = rh + h
+        per = rh
+        rh = self.layer4(rh)
+        rh = F.average_pooling_2d(rh, 7, stride=1)
+        rh = F.reshape(rh, (rh.size[0], -1)) # rx = rx.view(rx.size(0), -1)の書き換え
+        rh = self.fc(rh)
+
+        return ah, rh, [self.att, fe, per]

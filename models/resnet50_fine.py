@@ -52,6 +52,8 @@ class BaseResNet50(chainer.Chain):
             h = self.res3(h)
             h = self.res4(h)
             h = self.res5(h)
+            print(h.shape)
+            print(type(h))
 
             return h
 
