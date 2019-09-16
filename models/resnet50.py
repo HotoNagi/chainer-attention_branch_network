@@ -7,6 +7,7 @@ from chainer import initializers
 import chainer.links as L
 from chainer.functions.array.reshape import reshape
 
+
 class BottleNeckA(chainer.Chain):
 
     def __init__(self, in_size, ch, out_size, stride=2):
@@ -81,6 +82,10 @@ class Block(chainer.Chain):
 
 blockexpansion = 4
 
+
+
+#### Attention Branch Network ####
+
 class ResNet50(chainer.Chain):
 
     insize = 224
@@ -112,6 +117,10 @@ class ResNet50(chainer.Chain):
 
     def __call__(self, x):
 
+    #######################################################################
+    #                        Feature extractor                            #
+    #######################################################################
+
         h = self.bn1(self.conv1(x))
         h = F.max_pooling_2d(F.relu(h), 3, stride=2, pad=1)
 
@@ -121,6 +130,10 @@ class ResNet50(chainer.Chain):
 
         fe = h
 
+    #######################################################################
+    #                        Attention branch                             #
+    #######################################################################
+
         ah = self.bn_att(self.att_layer4(h))
         ah = F.relu(self.bn_att2(self.att_conv(ah)))
         self.att = F.sigmoid(self.bn_att3(self.att_conv3(ah)))
@@ -128,8 +141,12 @@ class ResNet50(chainer.Chain):
         #ah = F.average_pooling_2d(ah, 14)
         ah = _global_average_pooling_2d1(ah)
 
-        rh = h * self.att
-        rh = rh + h
+    #######################################################################
+    #                        Perception branch                            #
+    #######################################################################
+
+        rh = h * self.att #ここでAttention Mapをかけて
+        rh = rh + h # ここで足す
         per = rh
         rh = self.layer4(rh)
         #rh = F.average_pooling_2d(rh, 7, stride=1)
