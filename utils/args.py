@@ -20,7 +20,7 @@ def parser():
                         help="Number of using gpu_id")
 
     parser.add_argument('--arch', '-a',
-                        choices=archs.keys(), default='resnet50_fine',
+                        choices=archs.keys(), default='resnet50',
                         help="Name of using training model")
 
     parser.add_argument('--lr',

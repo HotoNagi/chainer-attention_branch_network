@@ -10,6 +10,7 @@ import datetime
 import numpy as np
 from pathlib import Path
 from utils.get_dataset import get_dataset
+from utils.abn_classifier import ABNClassifier
 
 import chainer
 import chainer.links as L
@@ -84,7 +85,8 @@ def main():
         train, validation, mean = get_dataset(train, validation, root, datasets, use_mean=True)
 
         # model setup
-        model = L.Classifier(archs[args.arch](output=class_num))
+        #model = L.Classifier(archs[args.arch](output=class_num))
+        model = ABNClassifier(archs[args.arch](output=class_num))
         lr = args.lr
         optimizer = chainer.optimizers.MomentumSGD(lr)
         optimizer.setup(model)

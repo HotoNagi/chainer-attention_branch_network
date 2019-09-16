@@ -5,7 +5,7 @@ import chainer
 import chainer.functions as F
 from chainer import initializers
 import chainer.links as L
-
+from chainer.functions.array.reshape import reshape
 
 class BottleNeckA(chainer.Chain):
 
@@ -95,7 +95,7 @@ class ResNet50(chainer.Chain):
             self.layer2 = Block(4, 256, 128, 512)
             self.layer3 = Block(6, 512, 256, 1024)
 
-            self.att_layer4 = Block(3, 1024, 512, 2048)
+            self.att_layer4 = Block(3, 1024, 512, 2048, 1)
             self.bn_att = L.BatchNormalization(512*blockexpansion)
             self.att_conv = L.Convolution2D(
                 512*blockexpansion, output, ksize=1, pad=0, initialW=initializers.HeNormal(), nobias=True)
@@ -104,7 +104,7 @@ class ResNet50(chainer.Chain):
                 output, output, ksize=1, pad=0, initialW=initializers.HeNormal(), nobias=True)
             self.att_conv3 = L.Convolution2D(
                 output, 1, ksize=3, pad=1, initialW=initializers.HeNormal(), nobias=True)
-            self.bn_att = L.BatchNormalization(1)
+            self.bn_att3 = L.BatchNormalization(1)
 
             self.layer4 = Block(3, 1024, 512, 2048)
             self.fc = L.Linear(512*blockexpansion, output)
@@ -113,7 +113,7 @@ class ResNet50(chainer.Chain):
     def __call__(self, x):
 
         h = self.bn1(self.conv1(x))
-        h = F.max_pooling_2d(F.relu(h), 3, stride=2)
+        h = F.max_pooling_2d(F.relu(h), 3, stride=2, pad=1)
 
         h = self.layer1(h)
         h = self.layer2(h)
@@ -125,15 +125,29 @@ class ResNet50(chainer.Chain):
         ah = F.relu(self.bn_att2(self.att_conv(ah)))
         self.att = F.sigmoid(self.bn_att3(self.att_conv3(ah)))
         ah = self.att_conv2(ah)
-        ah = F.average_pooling_2d(h, 14)
-        ah = F.reshape(ah, (ah.size[0], -1)) # ah = ah.view(ah.size(0), -1)の書き変え
+        #ah = F.average_pooling_2d(ah, 14)
+        ah = _global_average_pooling_2d1(ah)
 
         rh = h * self.att
         rh = rh + h
         per = rh
         rh = self.layer4(rh)
-        rh = F.average_pooling_2d(rh, 7, stride=1)
-        rh = F.reshape(rh, (rh.size[0], -1)) # rx = rx.view(rx.size(0), -1)の書き換え
+        #rh = F.average_pooling_2d(rh, 7, stride=1)
+        rh = _global_average_pooling_2d2(rh)
         rh = self.fc(rh)
 
         return ah, rh, [self.att, fe, per]
+
+
+
+def _global_average_pooling_2d1(x):
+    n, channel, rows, cols = x.shape
+    h = F.average_pooling_2d(x, (rows, cols), stride=2)
+    h = reshape(h, (n, channel))
+    return h
+
+def _global_average_pooling_2d2(x):
+    n, channel, rows, cols = x.shape
+    h = F.average_pooling_2d(x, (rows, cols), stride=1)
+    h = reshape(h, (n, channel))
+    return h
